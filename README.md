@@ -1,36 +1,29 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Text to Multi-Media Generator
 
-## Getting Started
+텍스트를 다양한 멀티미디어 형식으로 변환하는 Next.js 기반 웹 애플리케이션입니다.
 
-First, run the development server:
+## 주요 기능
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
-```
+- **Text to Speech**: Google Cloud Text-to-Speech API를 사용하여 자연스러운 음성을 생성
+- **Text to Image**: Stable Diffusion XL (Hugging Face)을 활용한 고품질 이미지 생성
+- **Text to Video**: D-ID API를 통한 AI 아바타 영상 생성
+- 다국어 지원: Google Cloud Translate API를 통한 자동 번역 기능
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+## 사용 기술
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+- **Frontend**: Next.js, TypeScript
+- **AI Services**:
+  - Google Cloud Text-to-Speech
+  - Hugging Face Stable Diffusion XL
+  - D-ID API
+  - Google Cloud Translate
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+## 환경 설정
 
-## Learn More
+프로젝트 실행을 위해 다음 API 키들이 필요합니다:
 
-To learn more about Next.js, take a look at the following resources:
+- Google Cloud API 키 (Text-to-Speech, Translate)
+- Hugging Face API 키 (Stable Diffusion)
+- D-ID API 키 (Video Generation)
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+API 키는 환경 변수로 설정해야 합니다.

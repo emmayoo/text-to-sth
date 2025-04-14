@@ -2,18 +2,6 @@ import { NextResponse } from "next/server";
 import fs from "fs/promises";
 import path from "path";
 
-async function cleanupFiles(extra: "audio" | "images") {
-  const imageDir = path.join(process.cwd(), "public", extra);
-  try {
-    const files = await fs.readdir(imageDir);
-    await Promise.all(
-      files.map((file) => fs.unlink(path.join(imageDir, file)))
-    );
-  } catch (error) {
-    console.error(`Error cleaning up ${extra} files:`, error);
-  }
-}
-
 export async function POST(request: Request) {
   try {
     const { items } = await request.json();

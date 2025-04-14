@@ -4,8 +4,25 @@ import { v2 } from "@google-cloud/translate";
 import fs from "fs";
 import path from "path";
 import { v4 as uuidv4 } from "uuid";
+import OpenAI from "openai";
+
 import { GeneratedItem } from "@/app/types";
 import { VOICE_CONFIGS } from "@/app/constants";
+
+const openaiClient = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+
+const translate = new v2.Translate({
+  key: process.env.GOOGLE_API_KEY,
+});
+
+async function translateText(text: string, targetLang = "en") {
+  const [translation] = await translate.translate(text, targetLang);
+  console.log("--------------------------------");
+  console.log(`Original: ${text}`);
+  console.log(`Translated: ${translation}`);
+  console.log("--------------------------------");
+  return translation;
+}
 
 export async function POST(req: Request) {
   const { text, type, voiceIndex, imagePrompt } = await req.json();
@@ -43,7 +60,12 @@ async function generateAudio(
     return { audio: "잘못된 음성 인덱스입니다.", status };
   }
 
-  const client = new TextToSpeechClient();
+  const base64 = process.env.GOOGLE_CREDENTIALS_BASE64;
+  const credentials = JSON.parse(
+    Buffer.from(base64!, "base64").toString("utf8")
+  );
+
+  const client = new TextToSpeechClient({ credentials });
   const audioDir = path.join(process.cwd(), "public", "audio");
 
   // 디렉토리가 없으면 생성
@@ -84,53 +106,27 @@ async function generateImage(
   text: string,
   imagePrompt?: string
 ): Promise<GeneratedItem> {
-  const imageDir = path.join(process.cwd(), "public", "images");
-
-  // 디렉토리가 없으면 생성
-  if (!fs.existsSync(imageDir)) {
-    fs.mkdirSync(imageDir, { recursive: true });
-  }
-
   // 기본 프롬프트와 사용자 프롬프트 조합
-  const finalPrompt = `${text}. ${imagePrompt}`;
+  const finalPrompt = `${text}. ${imagePrompt || ""}`.trim();
   console.log("finalPrompt", finalPrompt);
 
   const inputs = await translateText(finalPrompt);
   console.log("prompt (generateImage)", inputs);
 
-  const response = await fetch(
-    "https://api-inference.huggingface.co/models/stabilityai/stable-diffusion-xl-base-1.0",
-    {
-      headers: {
-        Authorization: `Bearer ${process.env.HUGGINGFACE_API_KEY}`,
-        "Content-Type": "application/json",
-      },
-      method: "POST",
-      body: JSON.stringify({
-        inputs: inputs,
-        parameters: {
-          negative_prompt: "blurry, bad quality, distorted, ugly, deformed",
-          num_inference_steps: 30,
-          guidance_scale: 7.5,
-        },
-      }),
-    }
-  );
+  const response = await openaiClient.images.generate({
+    model: "dall-e-2",
+    prompt: inputs,
+    n: 1,
+    size: "1024x1024",
+    response_format: "url", // b64_json
+  });
 
-  if (!response.ok) {
-    throw new Error(`Image generation failed: ${response.statusText}`);
-  }
-
-  const imageBuffer = await response.arrayBuffer();
-  const imageId = uuidv4();
-  const imagePath = path.join(imageDir, `${imageId}.png`);
-
-  await fs.promises.writeFile(imagePath, Buffer.from(imageBuffer));
+  const imageUrl = response.data[0].url;
 
   return {
-    id: imageId,
-    url: `/images/${imageId}.png`,
-    description: "Stable Diffusion XL로 생성된 이미지",
+    id: uuidv4(),
+    url: imageUrl as string,
+    description: "DALL·E 2로 생성된 이미지",
   };
 }
 
@@ -145,11 +141,9 @@ async function generateVideo(
     fs.mkdirSync(videoDir, { recursive: true });
   }
 
-  // const finalPrompt = `${text}. ${videoPrompt}`;
-  // console.log("finalPrompt", finalPrompt);
+  // const inputs = await translateText(text);
+  // console.log("prompt (generateVideo)", inputs);
 
-  const inputs = await translateText(text);
-  console.log("prompt (generateVideo)", inputs);
   try {
     // 1. 비디오 생성 요청
     const createResponse = await fetch("https://api.d-id.com/talks", {
@@ -162,7 +156,7 @@ async function generateVideo(
         script: {
           type: "text",
           subtitles: "false",
-          input: inputs,
+          input: text,
           provider: {
             type: "microsoft",
             voice_id: "Sara",
@@ -241,15 +235,4 @@ async function generateVideo(
     console.error("Video generation error:", error);
     throw error;
   }
-}
-
-// 클라이언트 생성
-const keyFilename = path.join(process.cwd(), ".gcp/credentials.json");
-const translate = new v2.Translate({ keyFilename });
-
-async function translateText(text: string, targetLang = "en") {
-  const [translation] = await translate.translate(text, targetLang);
-  console.log(`Original: ${text}`);
-  console.log(`Translated: ${translation}`);
-  return translation;
 }

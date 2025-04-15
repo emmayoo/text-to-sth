@@ -12,7 +12,7 @@ import {
 
 import type { GeneratedItem, GenerationResult } from "@/app/types";
 import { LoadingIcon } from "@/app/components/icons";
-import { createDefaultVideoPrompt } from "../lib/utils";
+import { createDefaultVideoPrompt } from "../utils";
 
 interface VideosProps {
   text: string;
@@ -72,15 +72,16 @@ export default function Videos({
 
     setIsImageLoading(true);
     try {
+      // CORS 오류 있어서 주석처리 함
       // 이미지 URL이 유효한지 확인
-      const response = await fetch(tempImageUrl);
-      if (!response.ok) {
-        throw new Error("Invalid image URL");
-      }
-      const contentType = response.headers.get("content-type");
-      if (!contentType?.startsWith("image/")) {
-        throw new Error("Invalid image type");
-      }
+      // const response = await fetch(tempImageUrl);
+      // if (!response.ok) {
+      //   throw new Error("Invalid image URL");
+      // }
+      // const contentType = response.headers.get("content-type");
+      // if (!contentType?.startsWith("image/")) {
+      //   throw new Error("Invalid image type");
+      // }
 
       setImageUrl(tempImageUrl);
       setUploadedImage(null);
@@ -311,12 +312,13 @@ export default function Videos({
 
             {/* 선택된 이미지 미리보기 */}
             {(uploadedImage || imageUrl) && (
-              <div className="relative w-12 h-12 rounded-lg overflow-hidden border border-purple-200 flex-shrink-0">
+              <div className="relative rounded-lg overflow-hidden border border-purple-200 flex-shrink-0">
                 <Image
                   src={uploadedImage || imageUrl}
                   alt="Selected image"
-                  fill
                   className="object-cover"
+                  width={48}
+                  height={48}
                 />
                 <button
                   onClick={() => {

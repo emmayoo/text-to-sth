@@ -10,7 +10,7 @@ import {
 
 import type { GeneratedItem, GenerationResult } from "@/app/types";
 import Image from "next/image";
-import { createDefaultImagePrompt } from "@/app/lib/utils";
+import { createDefaultImagePrompt } from "@/app/utils";
 import { CopyLinkIcon, LoadingIcon } from "@/app/components/icons";
 import { toast } from "react-hot-toast";
 

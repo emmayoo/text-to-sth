@@ -11,7 +11,7 @@ import { GeneratedItem } from "@/app/types";
 import { VOICE_CONFIGS } from "@/app/constants";
 
 const openaiClient = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
-const runwayClient = new RunwayML({ apiKey: process.env.RUNWAY_API_KEY });
+const runwayClient = new RunwayML(); // apiKey: process.env.RUNWAYML_API_SECRET
 
 const translate = new v2.Translate({
   key: process.env.GOOGLE_API_KEY,
@@ -27,8 +27,15 @@ async function translateText(text: string, targetLang = "en") {
 }
 
 export async function POST(req: Request) {
-  const { text, type, voiceIndex, imagePrompt, imageType, imageUrl } =
-    await req.json();
+  const {
+    text,
+    type,
+    voiceIndex,
+    imagePrompt,
+    videoPrompt,
+    imageType,
+    imageUrl,
+  } = await req.json();
 
   if (!text) {
     return NextResponse.json(
@@ -48,7 +55,7 @@ export async function POST(req: Request) {
   }
 
   if (type === "video") {
-    const video = await generateVideo(text, imageType, imageUrl);
+    const video = await generateVideo(text, imageType, imageUrl, videoPrompt);
     return NextResponse.json(video);
   }
 }
@@ -76,10 +83,8 @@ async function generateAudio(
     fs.mkdirSync(audioDir, { recursive: true });
   }
 
-  // 음성 설정 선택
   const config = VOICE_CONFIGS[voiceIndex];
 
-  // 선택된 음성 설정으로 TTS 생성
   const request = {
     input: { text },
     voice: {
@@ -109,25 +114,17 @@ async function generateImage(
   text: string,
   imagePrompt?: string
 ): Promise<GeneratedItem> {
-  return {
-    id: "9e5d7e9d-5498-40e4-a8ec-d1728afac076" + Date.now(),
-    url: `/images/9e5d7e9d-5498-40e4-a8ec-d1728afac076.png`,
-    description: "DALL·E 2로 생성된 이미지",
-  };
-  // 기본 프롬프트와 사용자 프롬프트 조합
-  const finalPrompt = `${text}. ${imagePrompt || ""}`.trim();
-  console.log("finalPrompt", finalPrompt);
-
-  const inputs = await translateText(finalPrompt);
+  const inputs = await translateText(`${text}. ${imagePrompt || ""}`);
   console.log("prompt (generateImage)", inputs);
 
   const response = await openaiClient.images.generate({
-    model: "dall-e-2",
+    model: "dall-e-3",
     prompt: inputs,
     n: 1,
     size: "1024x1024",
     response_format: "url", // b64_json
   });
+  console.log("response", response);
 
   const imageUrl = response.data[0].url;
 
@@ -139,54 +136,47 @@ async function generateImage(
 }
 
 async function generateVideo(
-  prompt: string,
+  text: string,
   imageType: "url" | "base64",
-  imageUrl: string
+  imageUrl: string,
+  videoPrompt: string
 ): Promise<GeneratedItem> {
+  const translated = await translateText(`${text}. ${videoPrompt}`);
+  console.log(imageType, imageUrl);
+
+  const imageToVideo = await runwayClient.imageToVideo.create({
+    model: "gen3a_turbo",
+    promptImage: imageUrl,
+    promptText: translated,
+    ratio: "1280:768",
+    duration: 5,
+  });
+
+  console.log("imageToVideo", imageToVideo);
+
+  const taskId = imageToVideo.id;
+
+  // Poll the task until it's complete
+  let task: Awaited<ReturnType<typeof runwayClient.tasks.retrieve>>;
+  do {
+    await new Promise((resolve) => setTimeout(resolve, 10000));
+
+    task = await runwayClient.tasks.retrieve(taskId);
+  } while (!["SUCCEEDED", "FAILED"].includes(task.status));
+
+  console.log("Task complete:", task);
+
+  if (task.status === "FAILED") {
+    return {
+      id: taskId,
+      url: "",
+      description: "RunwayML로 생성 실패",
+    };
+  }
+
   return {
-    id: "1455e3bc-5ef7-4240-911b-d4f390bbed96" + Date.now(),
-    url: `/videos/1455e3bc-5ef7-4240-911b-d4f390bbed96.mp4`,
+    id: taskId,
+    url: task.output?.[0] as string,
     description: "RunwayML로 생성된 비디오",
   };
-  const videoDir = path.join(process.cwd(), "public", "videos");
-
-  // 디렉토리가 없으면 생성
-  if (!fs.existsSync(videoDir)) {
-    fs.mkdirSync(videoDir, { recursive: true });
-  }
-
-  try {
-    // 1. 비디오 생성 요청
-    const imageToVideo = await runwayClient.imageToVideo.create({
-      model: "gen4_turbo",
-      promptImage: imageUrl,
-      promptText: prompt,
-    });
-
-    console.log("imageToVideo", imageToVideo);
-    const taskId = imageToVideo.id;
-
-    // Poll the task until it's complete
-    let task: Awaited<ReturnType<typeof runwayClient.tasks.retrieve>>;
-    do {
-      // Wait for ten seconds before polling
-      await new Promise((resolve) => setTimeout(resolve, 10000));
-
-      task = await runwayClient.tasks.retrieve(taskId);
-    } while (!["SUCCEEDED", "FAILED"].includes(task.status));
-
-    console.log("Task complete:", task);
-
-    // {
-    //   "id": "d2e3d1f4-1b3c-4b5c-8d46-1c1d7ee86892",
-    //   "status": "SUCCEEDED",
-    //   "createdAt": "2024-06-27T19:49:32.335Z",
-    //   "output": [
-    //     "https://dnznrvs05pmza.cloudfront.net/output.mp4?_jwt=..."
-    //   ]
-    // }
-  } catch (error) {
-    console.error("Video generation error:", error);
-    throw error;
-  }
 }

@@ -11,7 +11,7 @@ import {
 
 import type { GeneratedItem } from "@/app/types";
 import { Audios, Images, Videos } from "@/app/components";
-import { createDefaultImagePrompt } from "@/app/lib/utils";
+import { createDefaultImagePrompt } from "@/app/utils";
 import { LoadingIcon } from "@/app/components/icons";
 import { GenerationResult } from "@/app/types";
 import Link from "next/link";
@@ -100,6 +100,12 @@ export default function Home() {
         imageType,
         imageUrl,
       });
+
+      if (!result.url) {
+        toast.error("비디오 생성 실패");
+        return;
+      }
+
       setVideo(result);
       toast.success("비디오가 생성되었습니다!");
     } catch (error) {

@@ -106,20 +106,17 @@ async function generateImage(
   text: string,
   imagePrompt?: string
 ): Promise<GeneratedItem> {
-  // 기본 프롬프트와 사용자 프롬프트 조합
-  const finalPrompt = `${text}. ${imagePrompt || ""}`.trim();
-  console.log("finalPrompt", finalPrompt);
-
-  const inputs = await translateText(finalPrompt);
+  const inputs = await translateText(`${text}. ${imagePrompt || ""}`);
   console.log("prompt (generateImage)", inputs);
 
   const response = await openaiClient.images.generate({
-    model: "dall-e-2",
+    model: "dall-e-3",
     prompt: inputs,
     n: 1,
     size: "1024x1024",
     response_format: "url", // b64_json
   });
+  console.log("response", response);
 
   const imageUrl = response.data[0].url;
 

@@ -82,8 +82,9 @@ export default function Home() {
     }
   };
 
-  // s3에 저장
-  const handleSave = async () => {};
+  const handleSave = async () => {
+    alert("저장되었습니다. (아직 구현되지 않았습니다.)");
+  };
 
   const handleSelect = (type: keyof GenerationResult, id: string) => {
     if (type === "audios") {

@@ -34,16 +34,16 @@ export const VOICE_CONFIGS = [
   {
     languageCode: "ko-KR",
     name: "ko-KR-Wavenet-A",
-    description: "여성 음성 (자연스러운 톤)",
+    description: "여성 음성 (생동감 있는 톤)",
   },
   {
     languageCode: "ko-KR",
     name: "ko-KR-Wavenet-B",
-    description: "남성 음성 (자연스러운 톤)",
+    description: "여성 음성 (자연스러운 톤)",
   },
   {
     languageCode: "ko-KR",
     name: "ko-KR-Wavenet-C",
-    description: "여성 음성 (생동감 있는 톤)",
+    description: "남성 음성 (자연스러운 톤)",
   },
 ];

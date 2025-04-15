@@ -2,11 +2,17 @@
 
 import { useEffect, useState } from "react";
 import axios from "axios";
-import { CheckCircleIcon, PhotoIcon } from "@heroicons/react/24/outline";
+import {
+  CheckCircleIcon,
+  PhotoIcon,
+  ArrowPathIcon,
+} from "@heroicons/react/24/outline";
 
 import type { GeneratedItem, GenerationResult } from "@/app/types";
 import Image from "next/image";
 import { createDefaultImagePrompt } from "@/app/lib/utils";
+import { CopyLinkIcon, LoadingIcon } from "@/app/components/icons";
+import { toast } from "react-hot-toast";
 
 interface ImagesProps {
   text: string;
@@ -43,7 +49,28 @@ export default function Images({
     }
   };
 
-  // TODO. fix
+  const handleClick = (
+    e: React.MouseEvent<HTMLDivElement> | React.MouseEvent<HTMLButtonElement>,
+    id: string,
+    url?: string
+  ) => {
+    e.stopPropagation();
+
+    if (e.target instanceof HTMLButtonElement) {
+      navigator.clipboard
+        .writeText(url ?? "")
+        .then(() => {
+          toast.success("URL이 복사되었습니다!");
+        })
+        .catch(() => {
+          toast.error("URL 복사 실패");
+        });
+      return;
+    }
+
+    handleSelect("images", id);
+  };
+
   useEffect(() => {
     if (initialImage) {
       setImages([initialImage]);
@@ -55,27 +82,36 @@ export default function Images({
   }, [text]);
 
   useEffect(() => {
-    if (selectedId) {
-      setImages((prev) =>
-        prev.map((item) => ({ ...item, selected: item.id === selectedId }))
-      );
-    }
+    setImages((prev) =>
+      prev.map((item) => ({
+        ...item,
+        selected: item.id === selectedId,
+      }))
+    );
   }, [selectedId]);
 
-  if (!initialImage) return null;
-
   return (
-    <div className="mb-8">
-      <h2 className="text-lg font-semibold mb-4 flex items-center gap-2">
-        <PhotoIcon className="w-5 h-5" />
+    <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
+      <h2 className="text-xl font-semibold mb-6 flex items-center gap-2 text-gray-800">
+        <PhotoIcon className="w-6 h-6 text-green-500" />
         <span>이미지</span>
         <div className="flex items-center gap-2 ml-auto">
           <button
             onClick={handleRegenerateImage}
             disabled={isLoading}
-            className="px-4 py-1 text-sm bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50"
+            className="px-4 py-2 text-sm bg-gradient-to-r from-green-500 to-green-600 text-white rounded-lg hover:from-green-600 hover:to-green-700 disabled:opacity-50 transition-all duration-200 flex items-center gap-2 shadow-sm hover:shadow"
           >
-            {isLoading ? "생성 중..." : "다시 생성"}
+            {isLoading ? (
+              <>
+                <LoadingIcon className="w-4 h-4" />
+                <span>생성 중...</span>
+              </>
+            ) : (
+              <>
+                <ArrowPathIcon className="w-4 h-4" />
+                <span>다시 생성</span>
+              </>
+            )}
           </button>
         </div>
       </h2>
@@ -84,33 +120,48 @@ export default function Images({
         value={imagePrompt}
         onChange={(e) => setImagePrompt(e.target.value)}
         placeholder="이미지 생성을 위한 추가 프롬프트를 입력하세요..."
-        className="px-3 w-full h-14 py-1 border rounded text-sm bg-white text-gray-700"
+        className="w-full px-4 py-3 mb-6 border border-gray-200 rounded-lg text-sm bg-white text-gray-700 focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent transition-all duration-200 resize-none h-24"
         disabled={isLoading}
       />
-      <div className="grid grid-cols-2 gap-4">
-        {images.map((item) => (
-          <div
-            key={item.id}
-            className={`relative border-2 rounded-lg p-2 cursor-pointer
-                ${item.selected ? "border-blue-500" : "border-gray-200"}`}
-            onClick={() => handleSelect("images", item.id)}
-          >
-            {item.selected && (
-              <CheckCircleIcon className="absolute top-2 right-2 w-6 h-6 text-blue-500" />
-            )}
 
-            <div>
-              <Image
-                src={item.url}
-                alt={`${text} images`}
-                className="w-full h-full object-cover"
-                width={160}
-                height={160}
-              />
+      {images.length > 0 && (
+        <div className="grid grid-cols-2 gap-6">
+          {images.map((item) => (
+            <div
+              key={item.id}
+              className={`relative overflow-hidden rounded-xl transition-all duration-200 cursor-pointer hover:shadow-md
+                ${
+                  item.selected
+                    ? "ring-2 ring-green-500 shadow-lg"
+                    : "border border-gray-200 hover:border-green-300"
+                }`}
+              onClick={(e) => handleClick(e, item.id)}
+            >
+              <button
+                className="absolute top-3 left-3 z-10 bg-white rounded-lg p-1 flex items-center gap-2 text-black"
+                onClick={(e) => handleClick(e, item.id, item.url)}
+              >
+                URL <CopyLinkIcon className="w-4 h-4" />
+              </button>
+
+              {item.selected && (
+                <div className="absolute top-3 right-3 z-10 bg-green-500 text-white rounded-full p-1">
+                  <CheckCircleIcon className="w-5 h-5" />
+                </div>
+              )}
+              <div className="aspect-square relative overflow-hidden">
+                <Image
+                  src={item.url}
+                  alt={`${text} images`}
+                  className="object-cover transition-transform duration-200 hover:scale-105"
+                  fill
+                  sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
+                />
+              </div>
             </div>
-          </div>
-        ))}
-      </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

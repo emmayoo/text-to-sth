@@ -5,11 +5,13 @@ import fs from "fs";
 import path from "path";
 import { v4 as uuidv4 } from "uuid";
 import OpenAI from "openai";
+import RunwayML from "@runwayml/sdk";
 
 import { GeneratedItem } from "@/app/types";
 import { VOICE_CONFIGS } from "@/app/constants";
 
 const openaiClient = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+const runwayClient = new RunwayML({ apiKey: process.env.RUNWAY_API_KEY });
 
 const translate = new v2.Translate({
   key: process.env.GOOGLE_API_KEY,
@@ -25,7 +27,8 @@ async function translateText(text: string, targetLang = "en") {
 }
 
 export async function POST(req: Request) {
-  const { text, type, voiceIndex, imagePrompt } = await req.json();
+  const { text, type, voiceIndex, imagePrompt, imageType, imageUrl } =
+    await req.json();
 
   if (!text) {
     return NextResponse.json(
@@ -45,7 +48,7 @@ export async function POST(req: Request) {
   }
 
   if (type === "video") {
-    const video = await generateVideo(text);
+    const video = await generateVideo(text, imageType, imageUrl);
     return NextResponse.json(video);
   }
 }
@@ -106,6 +109,11 @@ async function generateImage(
   text: string,
   imagePrompt?: string
 ): Promise<GeneratedItem> {
+  return {
+    id: "9e5d7e9d-5498-40e4-a8ec-d1728afac076" + Date.now(),
+    url: `/images/9e5d7e9d-5498-40e4-a8ec-d1728afac076.png`,
+    description: "DALL·E 2로 생성된 이미지",
+  };
   // 기본 프롬프트와 사용자 프롬프트 조합
   const finalPrompt = `${text}. ${imagePrompt || ""}`.trim();
   console.log("finalPrompt", finalPrompt);
@@ -131,9 +139,15 @@ async function generateImage(
 }
 
 async function generateVideo(
-  text: string
-  // videoPrompt?: string
+  prompt: string,
+  imageType: "url" | "base64",
+  imageUrl: string
 ): Promise<GeneratedItem> {
+  return {
+    id: "1455e3bc-5ef7-4240-911b-d4f390bbed96" + Date.now(),
+    url: `/videos/1455e3bc-5ef7-4240-911b-d4f390bbed96.mp4`,
+    description: "RunwayML로 생성된 비디오",
+  };
   const videoDir = path.join(process.cwd(), "public", "videos");
 
   // 디렉토리가 없으면 생성
@@ -141,96 +155,36 @@ async function generateVideo(
     fs.mkdirSync(videoDir, { recursive: true });
   }
 
-  // const inputs = await translateText(text);
-  // console.log("prompt (generateVideo)", inputs);
-
   try {
     // 1. 비디오 생성 요청
-    const createResponse = await fetch("https://api.d-id.com/talks", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Basic ${process.env.DID_API_KEY}`,
-      },
-      body: JSON.stringify({
-        script: {
-          type: "text",
-          subtitles: "false",
-          input: text,
-          provider: {
-            type: "microsoft",
-            voice_id: "Sara",
-          },
-          ssml: "false",
-        },
-        config: {
-          fluent: "false",
-        },
-        source_url:
-          "https://d-id-public-bucket.s3.us-west-2.amazonaws.com/alice.jpg",
-      }),
+    const imageToVideo = await runwayClient.imageToVideo.create({
+      model: "gen4_turbo",
+      promptImage: imageUrl,
+      promptText: prompt,
     });
 
-    console.log("createResponse", createResponse);
+    console.log("imageToVideo", imageToVideo);
+    const taskId = imageToVideo.id;
 
-    if (!createResponse.ok) {
-      throw new Error(`Video creation failed: ${createResponse.statusText}`);
-    }
+    // Poll the task until it's complete
+    let task: Awaited<ReturnType<typeof runwayClient.tasks.retrieve>>;
+    do {
+      // Wait for ten seconds before polling
+      await new Promise((resolve) => setTimeout(resolve, 10000));
 
-    const { id } = await createResponse.json();
+      task = await runwayClient.tasks.retrieve(taskId);
+    } while (!["SUCCEEDED", "FAILED"].includes(task.status));
 
-    // 2. 생성 완료 대기 및 결과 확인
-    let videoUrl = null;
-    let attempts = 0;
-    const maxAttempts = 30; // 최대 30번 시도 (약 5분)
+    console.log("Task complete:", task);
 
-    while (attempts < maxAttempts) {
-      const checkResponse = await fetch(`https://api.d-id.com/talks/${id}`, {
-        headers: {
-          Authorization: `Basic ${process.env.DID_API_KEY}`,
-        },
-      });
-
-      if (!checkResponse.ok) {
-        throw new Error(
-          `Failed to check video status: ${checkResponse.statusText}`
-        );
-      }
-
-      const result = await checkResponse.json();
-
-      if (result.status === "done") {
-        videoUrl = result.result_url;
-        break;
-      } else if (result.status === "failed") {
-        throw new Error("Video generation failed");
-      }
-
-      await new Promise((resolve) => setTimeout(resolve, 10000)); // 10초 대기
-      attempts++;
-    }
-
-    if (!videoUrl) {
-      throw new Error("Video generation timed out");
-    }
-
-    // 3. 비디오 다운로드
-    const videoResponse = await fetch(videoUrl);
-    if (!videoResponse.ok) {
-      throw new Error("Failed to download video");
-    }
-
-    const videoBuffer = await videoResponse.arrayBuffer();
-    const videoId = uuidv4();
-    const videoPath = path.join(videoDir, `${videoId}.mp4`);
-
-    await fs.promises.writeFile(videoPath, Buffer.from(videoBuffer));
-
-    return {
-      id: videoId,
-      url: `/videos/${videoId}.mp4`,
-      description: "D-ID로 생성된 비디오",
-    };
+    // {
+    //   "id": "d2e3d1f4-1b3c-4b5c-8d46-1c1d7ee86892",
+    //   "status": "SUCCEEDED",
+    //   "createdAt": "2024-06-27T19:49:32.335Z",
+    //   "output": [
+    //     "https://dnznrvs05pmza.cloudfront.net/output.mp4?_jwt=..."
+    //   ]
+    // }
   } catch (error) {
     console.error("Video generation error:", error);
     throw error;

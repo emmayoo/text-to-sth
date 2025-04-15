@@ -2,10 +2,15 @@
 
 import { useEffect, useState } from "react";
 import axios from "axios";
-import { CheckCircleIcon, SpeakerWaveIcon } from "@heroicons/react/24/outline";
+import {
+  CheckCircleIcon,
+  SpeakerWaveIcon,
+  ArrowPathIcon,
+} from "@heroicons/react/24/outline";
 
 import { VOICE_CONFIGS } from "@/app/constants";
 import type { GeneratedItem, GenerationResult } from "@/app/types";
+import { LoadingIcon } from "@/app/components/icons";
 
 const voiceOptions = VOICE_CONFIGS.map((voice, index) => ({
   value: index,
@@ -47,7 +52,6 @@ export default function Audios({
     }
   };
 
-  // TODO. fix
   useEffect(() => {
     if (initialAudio) {
       setAudios([initialAudio]);
@@ -55,27 +59,38 @@ export default function Audios({
   }, [initialAudio]);
 
   useEffect(() => {
-    if (selectedId) {
-      setAudios((prev) =>
-        prev.map((item) => ({ ...item, selected: item.id === selectedId }))
-      );
-    }
+    setAudios((prev) =>
+      prev.map((item) => ({
+        ...item,
+        selected: item.id === selectedId,
+      }))
+    );
   }, [selectedId]);
 
   if (!initialAudio) return null;
 
   return (
-    <div className="mb-8">
-      <h2 className="text-lg font-semibold mb-4 flex items-center gap-2">
-        <SpeakerWaveIcon className="w-5 h-5" />
+    <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
+      <h2 className="text-xl font-semibold mb-6 flex items-center gap-2 text-gray-800">
+        <SpeakerWaveIcon className="w-6 h-6 text-blue-500" />
         <span>음성</span>
         <div className="flex items-center gap-2 ml-auto">
           <button
             onClick={handleRegenerateAudio}
             disabled={isLoading}
-            className="px-4 py-1 text-sm bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50"
+            className="px-4 py-2 text-sm bg-gradient-to-r from-blue-500 to-blue-600 text-white rounded-lg hover:from-blue-600 hover:to-blue-700 disabled:opacity-50 transition-all duration-200 flex items-center gap-2 shadow-sm hover:shadow"
           >
-            {isLoading ? "생성 중..." : "다시 생성"}
+            {isLoading ? (
+              <>
+                <LoadingIcon className="w-4 h-4" />
+                <span>생성 중...</span>
+              </>
+            ) : (
+              <>
+                <ArrowPathIcon className="w-4 h-4" />
+                <span>다시 생성</span>
+              </>
+            )}
           </button>
         </div>
       </h2>
@@ -83,7 +98,7 @@ export default function Audios({
       <select
         value={selectedVoiceIndex}
         onChange={(e) => setSelectedVoiceIndex(Number(e.target.value))}
-        className="px-3 py-1 mb-4 border rounded text-sm bg-white text-gray-700"
+        className="w-full px-4 py-2 mb-6 border border-gray-200 rounded-lg text-sm bg-white text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200"
         disabled={isLoading}
       >
         {voiceOptions.map((option) => (
@@ -92,20 +107,26 @@ export default function Audios({
           </option>
         ))}
       </select>
-      <div className="grid grid-cols-2 gap-4">
+
+      <div className="grid grid-cols-2 gap-6">
         {audios.map((item) => (
           <div
             key={item.id}
-            className={`relative border-2 rounded-lg p-2 cursor-pointer
-                ${item.selected ? "border-blue-500" : "border-gray-200"}`}
+            className={`relative overflow-hidden rounded-xl transition-all duration-200 cursor-pointer hover:shadow-md
+              ${
+                item.selected
+                  ? "ring-2 ring-blue-500 shadow-lg"
+                  : "border border-gray-200 hover:border-blue-300"
+              }`}
             onClick={() => handleSelect("audios", item.id)}
           >
-            {item.selected && (
-              <CheckCircleIcon className="absolute top-2 right-2 w-6 h-6 text-blue-500" />
-            )}
-
-            <div>
-              <div className="text-sm text-gray-600 mb-2">
+            <div className="p-4 bg-gradient-to-b from-gray-50 to-white">
+              {item.selected && (
+                <div className="absolute top-3 right-3 bg-blue-500 text-white rounded-full p-1">
+                  <CheckCircleIcon className="w-5 h-5" />
+                </div>
+              )}
+              <div className="text-sm text-gray-600 mb-3 font-medium">
                 {item.description}
               </div>
               <audio controls className="w-full">

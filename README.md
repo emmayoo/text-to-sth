@@ -14,6 +14,10 @@
   - 실제 사람과 같은 자연스러운 아바타가 텍스트를 말하는 비디오 생성
   - 다양한 아바타 선택 가능
   - 자연스러운 립싱크와 표정 변화
+- **Text to Video**: Runway AI Gen-2 모델을 통한 AI 비디오 생성
+  - 텍스트 프롬프트 기반의 고품질 비디오 생성
+  - 4초 길이의 HD 비디오 생성
+  - 자연스러운 움직임과 장면 전환
 - **다국어 지원**: Google Cloud Translate API를 통한 자동 번역 기능
   - 입력된 한국어를 영어로 자동 번역하여 AI 모델에 전달
 
@@ -23,7 +27,7 @@
 - **AI Services**:
   - Google Cloud Text-to-Speech
   - OpenAI DALL·E 2
-  - D-ID API
+  - Runway AI Gen-2
   - Google Cloud Translate
 
 ## 환경 설정
@@ -40,9 +44,9 @@
    - `OPENAI_API_KEY`: OpenAI API 키
    - DALL·E API 사용 권한 필요
 
-3. **D-ID 설정**
-   - `D_ID_API_KEY`: D-ID API 키
-   - `D_ID_API_URL`: D-ID API 엔드포인트 URL
+3. **Runway AI 설정**
+   - `RUNWAY_API_KEY`: Runway AI API 키
+   - 최소 50 크레딧 필요
 
 ### 환경 변수 설정
 
@@ -55,9 +59,8 @@ GOOGLE_CREDENTIALS_BASE64=your_base64_encoded_credentials
 # OpenAI
 OPENAI_API_KEY=your_openai_api_key
 
-# D-ID
-D_ID_API_KEY=your_did_api_key
-D_ID_API_URL=https://api.d-id.com
+# Runway AI
+RUNWAY_API_KEY=your_runway_api_key
 ```
 
 ## 사용 방법

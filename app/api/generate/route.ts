@@ -76,7 +76,12 @@ async function generateAudio(
   );
 
   const client = new TextToSpeechClient({ credentials });
-  const audioDir = path.join(process.cwd(), "public", "audio");
+
+  // production 환경에서는 /tmp 디렉토리 사용
+  const isProduction = process.env.NODE_ENV === "production";
+  const audioDir = isProduction
+    ? "/tmp/audio"
+    : path.join(process.cwd(), "public", "audio");
 
   try {
     await fs.access(audioDir);
@@ -100,6 +105,17 @@ async function generateAudio(
   const audioPath = path.join(audioDir, `${audioId}.mp3`);
 
   await fs.writeFile(audioPath, response.audioContent as Buffer);
+
+  // production 환경에서는 파일을 public 디렉토리로 복사
+  if (isProduction) {
+    const publicDir = path.join(process.cwd(), "public", "audio");
+    try {
+      await fs.access(publicDir);
+    } catch {
+      await fs.mkdir(publicDir, { recursive: true });
+    }
+    await fs.copyFile(audioPath, path.join(publicDir, `${audioId}.mp3`));
+  }
 
   return {
     audio: {

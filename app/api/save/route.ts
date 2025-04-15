@@ -34,6 +34,9 @@ export async function POST(request: Request) {
       );
     }
 
+    const isProduction = process.env.NODE_ENV === "production";
+    const baseDir = isProduction ? "/tmp" : path.join(process.cwd(), "public");
+
     // S3에 파일 업로드 및 URL 수집
     const uploadedItems: SavedItem[] = await Promise.all(
       items.map(async (item: SaveItem) => {
@@ -51,7 +54,7 @@ export async function POST(request: Request) {
           else if (item.type === "audio") fileName += ".mp3";
         } else {
           // 로컬 파일인 경우 기존 로직 사용
-          const filePath = path.join(process.cwd(), "public", item.path);
+          const filePath = path.join(baseDir, item.path);
           fileContent = await fs.readFile(filePath);
           fileName = path.basename(item.path);
         }
@@ -76,7 +79,7 @@ export async function POST(request: Request) {
     );
 
     // 저장 디렉토리 생성
-    const saveDir = path.join(process.cwd(), "public", "saved");
+    const saveDir = path.join(baseDir, "saved");
     try {
       await fs.access(saveDir);
     } catch {
@@ -90,10 +93,19 @@ export async function POST(request: Request) {
     };
 
     const filename = `saved_${Date.now()}.json`;
-    await fs.writeFile(
-      path.join(saveDir, filename),
-      JSON.stringify(savedItems, null, 2)
-    );
+    const jsonPath = path.join(saveDir, filename);
+    await fs.writeFile(jsonPath, JSON.stringify(savedItems, null, 2));
+
+    // production 환경에서는 JSON 파일을 public 디렉토리로 복사
+    if (isProduction) {
+      const publicSaveDir = path.join(process.cwd(), "public", "saved");
+      try {
+        await fs.access(publicSaveDir);
+      } catch {
+        await fs.mkdir(publicSaveDir, { recursive: true });
+      }
+      await fs.copyFile(jsonPath, path.join(publicSaveDir, filename));
+    }
 
     return NextResponse.json({
       success: true,

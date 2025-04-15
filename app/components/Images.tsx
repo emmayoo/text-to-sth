@@ -10,9 +10,8 @@ import {
 
 import type { GeneratedItem, GenerationResult } from "@/app/types";
 import Image from "next/image";
-import { createDefaultImagePrompt } from "@/app/utils";
+import { copyText, createDefaultImagePrompt } from "@/app/utils";
 import { CopyLinkIcon, LoadingIcon } from "@/app/components/icons";
-import { toast } from "react-hot-toast";
 
 interface ImagesProps {
   text: string;
@@ -57,14 +56,7 @@ export default function Images({
     e.stopPropagation();
 
     if (e.target instanceof HTMLButtonElement) {
-      navigator.clipboard
-        .writeText(url ?? "")
-        .then(() => {
-          toast.success("URL이 복사되었습니다!");
-        })
-        .catch(() => {
-          toast.error("URL 복사 실패");
-        });
+      copyText(url ?? "");
       return;
     }
 

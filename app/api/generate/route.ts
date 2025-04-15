@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { TextToSpeechClient } from "@google-cloud/text-to-speech";
 import { v2 } from "@google-cloud/translate";
-import fs from "fs";
+import fs from "fs/promises";
 import path from "path";
 import { v4 as uuidv4 } from "uuid";
 import OpenAI from "openai";
@@ -78,9 +78,10 @@ async function generateAudio(
   const client = new TextToSpeechClient({ credentials });
   const audioDir = path.join(process.cwd(), "public", "audio");
 
-  // 디렉토리가 없으면 생성
-  if (!fs.existsSync(audioDir)) {
-    fs.mkdirSync(audioDir, { recursive: true });
+  try {
+    await fs.access(audioDir);
+  } catch {
+    await fs.mkdir(audioDir, { recursive: true });
   }
 
   const config = VOICE_CONFIGS[voiceIndex];
@@ -98,7 +99,7 @@ async function generateAudio(
   const audioId = uuidv4();
   const audioPath = path.join(audioDir, `${audioId}.mp3`);
 
-  await fs.promises.writeFile(audioPath, response.audioContent as Buffer);
+  await fs.writeFile(audioPath, response.audioContent as Buffer);
 
   return {
     audio: {

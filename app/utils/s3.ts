@@ -1,10 +1,15 @@
-import { S3Client, PutObjectCommand } from "@aws-sdk/client-s3";
+import {
+  S3Client,
+  PutObjectCommand,
+  GetObjectCommand,
+} from "@aws-sdk/client-s3";
+import { getSignedUrl as awsGetSignedUrl } from "@aws-sdk/s3-request-presigner";
 
 const s3Client = new S3Client({
-  region: process.env.AWS_REGION!,
+  region: process.env.AWS_REGION || "ap-northeast-2",
   credentials: {
-    accessKeyId: process.env.AWS_ACCESS_KEY_ID!,
-    secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY!,
+    accessKeyId: process.env.AWS_ACCESS_KEY_ID || "",
+    secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY || "",
   },
 });
 
@@ -17,25 +22,34 @@ const s3Client = new S3Client({
  * @throws {Error} 파일 업로드 실패 시 에러
  */
 export async function uploadToS3(
-  file: File | Blob,
+  file: Blob,
   key: string,
   contentType: string
 ): Promise<string> {
-  try {
-    const buffer = Buffer.from(await file.arrayBuffer());
+  const bucket = process.env.AWS_S3_BUCKET || "";
+  const arrayBuffer = await file.arrayBuffer();
+  const buffer = Buffer.from(arrayBuffer);
 
-    await s3Client.send(
-      new PutObjectCommand({
-        Bucket: process.env.AWS_S3_BUCKET!,
-        Key: key,
-        Body: buffer,
-        ContentType: contentType,
-      })
-    );
+  const command = new PutObjectCommand({
+    Bucket: bucket,
+    Key: key,
+    Body: buffer,
+    ContentType: contentType,
+  });
 
-    return `https://${process.env.AWS_S3_BUCKET}.s3.${process.env.AWS_REGION}.amazonaws.com/${key}`;
-  } catch (error) {
-    console.error("파일 업로드 중 에러 발생:", error);
-    throw new Error("파일 업로드에 실패했습니다.");
-  }
+  await s3Client.send(command);
+  return `https://${bucket}.s3.${process.env.AWS_REGION}.amazonaws.com/${key}`;
+}
+
+export async function getSignedUrl(
+  key: string,
+  expiresIn = 3600
+): Promise<string> {
+  const bucket = process.env.AWS_S3_BUCKET || "";
+  const command = new GetObjectCommand({
+    Bucket: bucket,
+    Key: key,
+  });
+
+  return awsGetSignedUrl(s3Client, command, { expiresIn });
 }

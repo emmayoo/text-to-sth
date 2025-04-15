@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import fs from "fs/promises";
 import path from "path";
 import axios from "axios";
-import { uploadToS3 } from "@/app/utils/s3";
+import { uploadToS3, getSignedUrl } from "@/app/utils/s3";
 
 interface SaveItem {
   path: string;
@@ -14,6 +14,7 @@ interface SaveItem {
 
 interface SavedItem extends SaveItem {
   s3Url: string;
+  signedUrl: string;
 }
 
 async function downloadFile(url: string): Promise<Buffer> {
@@ -34,9 +35,6 @@ export async function POST(request: Request) {
       );
     }
 
-    const isProduction = process.env.NODE_ENV === "production";
-    const baseDir = isProduction ? "/tmp" : path.join(process.cwd(), "public");
-
     // S3에 파일 업로드 및 URL 수집
     const uploadedItems: SavedItem[] = await Promise.all(
       items.map(async (item: SaveItem) => {
@@ -54,7 +52,7 @@ export async function POST(request: Request) {
           else if (item.type === "audio") fileName += ".mp3";
         } else {
           // 로컬 파일인 경우 기존 로직 사용
-          const filePath = path.join(baseDir, item.path);
+          const filePath = path.join(process.cwd(), "public", item.path);
           fileContent = await fs.readFile(filePath);
           fileName = path.basename(item.path);
         }
@@ -67,45 +65,31 @@ export async function POST(request: Request) {
         else if (item.type === "videos") contentType = "video/mp4";
         else if (item.type === "audio") contentType = "audio/mp3";
 
-        // S3에 업로드
-        const s3Key = `${item.type}/${fileName}`;
+        // S3에 업로드 (temp 폴더 사용)
+        const s3Key = `temp/${item.type}/${fileName}`;
         const s3Url = await uploadToS3(fileBlob, s3Key, contentType);
+        const signedUrl = await getSignedUrl(s3Key);
 
         return {
           ...item,
           s3Url,
+          signedUrl,
         };
       })
     );
 
-    // 저장 디렉토리 생성
-    const saveDir = path.join(baseDir, "saved");
-    try {
-      await fs.access(saveDir);
-    } catch {
-      await fs.mkdir(saveDir, { recursive: true });
-    }
-
-    // 선택된 항목들의 정보를 저장
+    // 저장 정보를 JSON 파일로 저장
     const savedItems = {
       timestamp: new Date().toISOString(),
       items: uploadedItems,
     };
 
     const filename = `saved_${Date.now()}.json`;
-    const jsonPath = path.join(saveDir, filename);
-    await fs.writeFile(jsonPath, JSON.stringify(savedItems, null, 2));
+    const jsonKey = `temp/saved/${filename}`;
 
-    // production 환경에서는 JSON 파일을 public 디렉토리로 복사
-    if (isProduction) {
-      const publicSaveDir = path.join(process.cwd(), "public", "saved");
-      try {
-        await fs.access(publicSaveDir);
-      } catch {
-        await fs.mkdir(publicSaveDir, { recursive: true });
-      }
-      await fs.copyFile(jsonPath, path.join(publicSaveDir, filename));
-    }
+    // JSON 파일을 S3에 업로드
+    const jsonBlob = new Blob([JSON.stringify(savedItems, null, 2)]);
+    await uploadToS3(jsonBlob, jsonKey, "application/json");
 
     return NextResponse.json({
       success: true,

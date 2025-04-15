@@ -1,17 +1,16 @@
 import { NextResponse } from "next/server";
 import { TextToSpeechClient } from "@google-cloud/text-to-speech";
 import { v2 } from "@google-cloud/translate";
-import fs from "fs/promises";
-import path from "path";
 import { v4 as uuidv4 } from "uuid";
 import OpenAI from "openai";
 import RunwayML from "@runwayml/sdk";
+import { uploadToS3, getSignedUrl } from "@/app/utils/s3";
 
 import { GeneratedItem } from "@/app/types";
 import { VOICE_CONFIGS } from "@/app/constants";
 
 const openaiClient = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
-const runwayClient = new RunwayML(); // apiKey: process.env.RUNWAYML_API_SECRET
+const runwayClient = new RunwayML();
 
 const translate = new v2.Translate({
   key: process.env.GOOGLE_API_KEY,
@@ -76,19 +75,6 @@ async function generateAudio(
   );
 
   const client = new TextToSpeechClient({ credentials });
-
-  // production 환경에서는 /tmp 디렉토리 사용
-  const isProduction = process.env.NODE_ENV === "production";
-  const audioDir = isProduction
-    ? "/tmp/audio"
-    : path.join(process.cwd(), "public", "audio");
-
-  try {
-    await fs.access(audioDir);
-  } catch {
-    await fs.mkdir(audioDir, { recursive: true });
-  }
-
   const config = VOICE_CONFIGS[voiceIndex];
 
   const request = {
@@ -102,25 +88,19 @@ async function generateAudio(
 
   const [response] = await client.synthesizeSpeech(request);
   const audioId = uuidv4();
-  const audioPath = path.join(audioDir, `${audioId}.mp3`);
+  const audioKey = `temp/audio/${audioId}.mp3`;
 
-  await fs.writeFile(audioPath, response.audioContent as Buffer);
+  // S3에 오디오 파일 업로드
+  const audioBlob = new Blob([response.audioContent as Buffer]);
+  await uploadToS3(audioBlob, audioKey, "audio/mp3");
 
-  // production 환경에서는 파일을 public 디렉토리로 복사
-  if (isProduction) {
-    const publicDir = path.join(process.cwd(), "public", "audio");
-    try {
-      await fs.access(publicDir);
-    } catch {
-      await fs.mkdir(publicDir, { recursive: true });
-    }
-    await fs.copyFile(audioPath, path.join(publicDir, `${audioId}.mp3`));
-  }
+  // 서명된 URL 생성
+  const signedUrl = await getSignedUrl(audioKey);
 
   return {
     audio: {
       id: audioId,
-      url: `/audio/${audioId}.mp3`,
+      url: signedUrl,
       description: config.description,
     },
     status,

@@ -44,14 +44,21 @@ export default function Home() {
       videoPrompt?: string;
       imageUrl?: string;
       imageType?: "url" | "base64";
+    },
+    axiosConfig?: {
+      timeout?: number;
     }
   ) => {
     try {
-      const response = await axios.post("/api/generate", {
-        text,
-        type,
-        ...options,
-      });
+      const response = await axios.post(
+        "/api/generate",
+        {
+          text,
+          type,
+          ...options,
+        },
+        { ...axiosConfig }
+      );
       return response.data;
     } catch (error) {
       console.error("Generation error:", error);
@@ -98,11 +105,18 @@ export default function Home() {
     setLoading(true);
 
     try {
-      const result = await generate(text, "video", {
-        videoPrompt: prompt,
-        imageType,
-        imageUrl,
-      });
+      const result = await generate(
+        text,
+        "video",
+        {
+          videoPrompt: prompt,
+          imageType,
+          imageUrl,
+        },
+        {
+          timeout: 1000 * 60 * 5, // 5분
+        }
+      );
       console.log("result", result);
 
       if (!result.url) {

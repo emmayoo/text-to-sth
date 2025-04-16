@@ -16,6 +16,17 @@ import { LoadingIcon } from "@/app/components/icons";
 import { GenerationResult } from "@/app/types";
 import Link from "next/link";
 
+interface VideoGenerationResponse {
+  id: string;
+  url: string;
+  status?: "SUCCEEDED" | "FAILED" | "PROCESSING";
+  description?: string;
+}
+
+const MAX_POLLING_ATTEMPTS = 30; // 5분 (10초 간격)
+const POLLING_INTERVAL = 10000; // 10초
+const AXIOS_TIMEOUT = 60 * 5 * 1000; // 5분
+
 export default function Home() {
   const [text, setText] = useState("");
   const [loading, setLoading] = useState(false);
@@ -44,21 +55,14 @@ export default function Home() {
       videoPrompt?: string;
       imageUrl?: string;
       imageType?: "url" | "base64";
-    },
-    axiosConfig?: {
-      timeout?: number;
     }
   ) => {
     try {
-      const response = await axios.post(
-        "/api/generate",
-        {
-          text,
-          type,
-          ...options,
-        },
-        { ...axiosConfig }
-      );
+      const response = await axios.post("/api/generate", {
+        text,
+        type,
+        ...options,
+      });
       return response.data;
     } catch (error) {
       console.error("Generation error:", error);
@@ -97,6 +101,52 @@ export default function Home() {
     }
   };
 
+  const pollVideoGeneration = async (
+    taskId: string
+  ): Promise<VideoGenerationResponse> => {
+    let attempts = 0;
+
+    while (attempts < MAX_POLLING_ATTEMPTS) {
+      try {
+        const response = await axios.get<VideoGenerationResponse>(
+          `/api/video-polling?taskId=${taskId}`,
+          {
+            timeout: AXIOS_TIMEOUT,
+          }
+        );
+
+        if (response.data.status === "SUCCEEDED") {
+          return response.data;
+        }
+        if (response.data.status === "FAILED") {
+          throw new Error("비디오 생성에 실패했습니다.");
+        }
+
+        // PROCESSING 상태이면 계속 폴링
+        attempts++;
+        if (attempts < MAX_POLLING_ATTEMPTS) {
+          await new Promise((resolve) => setTimeout(resolve, POLLING_INTERVAL));
+        }
+      } catch (error) {
+        if (axios.isAxiosError(error)) {
+          if (error.code === "ECONNABORTED") {
+            throw new Error("요청 시간이 초과되었습니다.");
+          }
+          // 504 에러는 계속 시도
+          if (error.response?.status !== 504) {
+            throw error;
+          }
+        }
+        attempts++;
+        if (attempts < MAX_POLLING_ATTEMPTS) {
+          await new Promise((resolve) => setTimeout(resolve, POLLING_INTERVAL));
+        }
+      }
+    }
+
+    throw new Error("시간 초과: 비디오 생성이 완료되지 않았습니다.");
+  };
+
   const handleGenerateVideo = async (
     prompt: string,
     imageType: "url" | "base64",
@@ -105,29 +155,39 @@ export default function Home() {
     setLoading(true);
 
     try {
-      const result = await generate(
-        text,
-        "video",
-        {
-          videoPrompt: prompt,
-          imageType,
-          imageUrl,
-        },
-        {
-          timeout: 1000 * 60 * 5, // 5분
-        }
-      );
-      console.log("result", result);
+      // 초기 비디오 생성 요청
+      const initResult = await generate(text, "video", {
+        videoPrompt: prompt,
+        imageType,
+        imageUrl,
+      });
 
-      if (!result.url) {
-        toast.error("비디오 생성 실패");
-        return;
+      console.log("initResult", initResult);
+
+      if (!initResult.taskId) {
+        throw new Error("작업 ID를 받지 못했습니다.");
       }
 
-      setVideo(result);
+      // 상태 폴링 시작
+      const result = await pollVideoGeneration(initResult.taskId);
+
+      if (!result.url) {
+        throw new Error("비디오 URL을 받지 못했습니다.");
+      }
+
+      setVideo({
+        id: result.id,
+        url: result.url,
+        description: result.description || "생성된 비디오",
+      });
       toast.success("비디오가 생성되었습니다!");
     } catch (error) {
       console.error("Video generation error:", error);
+      const errorMessage =
+        error instanceof Error
+          ? error.message
+          : "비디오 생성 중 오류가 발생했습니다.";
+      toast.error(errorMessage);
     } finally {
       setLoading(false);
     }

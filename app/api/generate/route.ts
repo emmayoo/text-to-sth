@@ -137,7 +137,7 @@ async function generateVideo(
   imageType: "url" | "base64",
   imageUrl: string,
   videoPrompt: string
-): Promise<GeneratedItem> {
+): Promise<{ taskId: string }> {
   const translated = await translateText(`${text}. ${videoPrompt}`);
   console.log(imageType, imageUrl);
 
@@ -151,31 +151,7 @@ async function generateVideo(
 
   console.log("imageToVideo", imageToVideo);
 
-  const taskId = imageToVideo.id;
-
-  // Poll the task until it's complete
-  let count = 0;
-  let task: Awaited<ReturnType<typeof runwayClient.tasks.retrieve>>;
-  do {
-    await new Promise((resolve) => setTimeout(resolve, 10000));
-    count++;
-    task = await runwayClient.tasks.retrieve(taskId);
-    console.log(`---task ${count}---`, task);
-  } while (!["SUCCEEDED", "FAILED"].includes(task.status));
-
-  console.log("Task complete:", task);
-
-  if (task.status === "FAILED") {
-    return {
-      id: taskId,
-      url: "",
-      description: "RunwayML로 생성 실패",
-    };
-  }
-
   return {
-    id: taskId,
-    url: task.output?.[0] as string,
-    description: "RunwayML로 생성된 비디오",
+    taskId: imageToVideo.id,
   };
 }

@@ -154,11 +154,13 @@ async function generateVideo(
   const taskId = imageToVideo.id;
 
   // Poll the task until it's complete
+  let count = 0;
   let task: Awaited<ReturnType<typeof runwayClient.tasks.retrieve>>;
   do {
     await new Promise((resolve) => setTimeout(resolve, 10000));
-
+    count++;
     task = await runwayClient.tasks.retrieve(taskId);
+    console.log(`---task ${count}---`, task);
   } while (!["SUCCEEDED", "FAILED"].includes(task.status));
 
   console.log("Task complete:", task);

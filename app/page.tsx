@@ -103,6 +103,7 @@ export default function Home() {
         imageType,
         imageUrl,
       });
+      console.log("result", result);
 
       if (!result.url) {
         toast.error("비디오 생성 실패");

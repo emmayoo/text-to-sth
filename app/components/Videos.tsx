@@ -8,16 +8,19 @@ import {
   CheckCircleIcon,
   PhotoIcon,
   VideoCameraIcon,
+  XMarkIcon,
 } from "@heroicons/react/24/outline";
 
 import type { GeneratedItem, GenerationResult } from "@/app/types";
 import { LoadingIcon } from "@/app/components/icons";
 import { createDefaultVideoPrompt } from "../utils";
+import toast from "react-hot-toast";
 
 interface VideosProps {
   text: string;
   video: GeneratedItem | null;
   selectedId: string | null;
+  selectedImageURL: string | null;
   handleSelect: (type: keyof GenerationResult, id: string) => void;
   handleGenerateVideo: (
     prompt: string,
@@ -30,6 +33,7 @@ export default function Videos({
   text,
   video,
   selectedId,
+  selectedImageURL,
   handleSelect,
   handleGenerateVideo,
 }: VideosProps) {
@@ -40,7 +44,9 @@ export default function Videos({
   );
   const [imageUrl, setImageUrl] = useState<string>("");
   const [uploadedImage, setUploadedImage] = useState<string | null>(null);
-  const [imageInputType, setImageInputType] = useState<"url" | "upload">("url");
+  const [imageInputType, setImageInputType] = useState<
+    "url" | "upload" | "selected"
+  >("url");
   const [tempImageUrl, setTempImageUrl] = useState<string>("");
   const [isImageLoading, setIsImageLoading] = useState(false);
 
@@ -140,6 +146,17 @@ export default function Videos({
     } finally {
       setIsLoading(false);
     }
+  };
+
+  const handleUseSelectedImage = () => {
+    if (!selectedImageURL) {
+      toast.error("선택된 이미지가 없습니다.");
+      return;
+    }
+
+    setImageInputType("selected");
+    setImageUrl(selectedImageURL);
+    setUploadedImage(null);
   };
 
   useEffect(() => {
@@ -255,11 +272,21 @@ export default function Videos({
               >
                 파일
               </button>
+              <button
+                onClick={handleUseSelectedImage}
+                className={`py-1 px-3 rounded-lg text-xs ${
+                  imageInputType === "selected"
+                    ? "bg-purple-100 text-purple-700 ring-1 ring-purple-500"
+                    : "bg-gray-100 text-gray-600"
+                } transition-colors duration-200`}
+              >
+                선택된 이미지 사용
+              </button>
             </div>
           </div>
 
           <div className="flex gap-2">
-            {imageInputType === "url" ? (
+            {imageInputType === "url" && (
               <>
                 <input
                   type="url"
@@ -288,7 +315,8 @@ export default function Videos({
                   )}
                 </button>
               </>
-            ) : (
+            )}
+            {imageInputType === "upload" && (
               <label
                 htmlFor="video-image-upload"
                 className={`flex-1 flex items-center justify-center gap-2 py-2 px-3 border-2 border-dashed 
@@ -330,19 +358,7 @@ export default function Videos({
                     flex items-center justify-center"
                   disabled={isLoading}
                 >
-                  <svg
-                    className="w-4 h-4 text-white"
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2}
-                      d="M6 18L18 6M6 6l12 12"
-                    />
-                  </svg>
+                  <XMarkIcon className="w-4 h-4 text-white" />
                 </button>
               </div>
             )}

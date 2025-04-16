@@ -19,6 +19,7 @@ import Link from "next/link";
 export default function Home() {
   const [text, setText] = useState("");
   const [loading, setLoading] = useState(false);
+  const [saveLoading, setSaveLoading] = useState(false);
   const [step, setStep] = useState<"input" | "audio" | "image" | "video">(
     "input"
   );
@@ -31,6 +32,8 @@ export default function Home() {
   const [selectedAudioId, setSelectedAudioId] = useState<string | null>(null);
   const [selectedImageId, setSelectedImageId] = useState<string | null>(null);
   const [selectedVideoId, setSelectedVideoId] = useState<string | null>(null);
+
+  const [selectedImageURL, setSelectedImageURL] = useState<string | null>(null);
 
   const generate = async (
     text: string,
@@ -172,7 +175,7 @@ export default function Home() {
       return;
     }
 
-    setLoading(true);
+    setSaveLoading(true);
     try {
       const response = await axios.post("/api/save", { items: selectedItems });
       if (response.data.success) {
@@ -182,7 +185,7 @@ export default function Home() {
       console.error("Save error:", error);
       toast.error("저장 중 오류가 발생했습니다.");
     } finally {
-      setLoading(false);
+      setSaveLoading(false);
     }
   };
 
@@ -203,12 +206,12 @@ export default function Home() {
             <div className="flex items-center gap-2 w-full">
               <button
                 onClick={handleSave}
-                disabled={loading}
+                disabled={saveLoading}
                 className="px-6 py-3 bg-gradient-to-r from-green-500 to-green-600 text-white rounded-xl
                 hover:from-green-600 hover:to-green-700 disabled:opacity-50 disabled:cursor-not-allowed
                 transition-all duration-200 shadow-sm hover:shadow flex items-center gap-2"
               >
-                {loading ? (
+                {saveLoading ? (
                   <>
                     <LoadingIcon className="w-5 h-5" />
                     <span>저장 중...</span>
@@ -299,6 +302,7 @@ export default function Home() {
                 image={image}
                 selectedId={selectedImageId}
                 handleSelect={handleSelect}
+                setSelectedImageURL={setSelectedImageURL}
               />
             )}
 
@@ -308,6 +312,7 @@ export default function Home() {
                 text={text}
                 video={video}
                 selectedId={selectedVideoId}
+                selectedImageURL={selectedImageURL}
                 handleSelect={handleSelect}
                 handleGenerateVideo={handleGenerateVideo}
               />

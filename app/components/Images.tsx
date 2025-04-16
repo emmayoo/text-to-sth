@@ -10,14 +10,15 @@ import {
 
 import type { GeneratedItem, GenerationResult } from "@/app/types";
 import Image from "next/image";
-import { copyText, createDefaultImagePrompt } from "@/app/utils";
-import { CopyLinkIcon, LoadingIcon } from "@/app/components/icons";
+import { createDefaultImagePrompt } from "@/app/utils";
+import { LoadingIcon } from "@/app/components/icons";
 
 interface ImagesProps {
   text: string;
   image: GeneratedItem | null;
   selectedId: string | null;
   handleSelect: (type: keyof GenerationResult, id: string) => void;
+  setSelectedImageURL: (url: string) => void;
 }
 
 export default function Images({
@@ -25,6 +26,7 @@ export default function Images({
   image: initialImage,
   selectedId,
   handleSelect,
+  setSelectedImageURL,
 }: ImagesProps) {
   const [images, setImages] = useState<GeneratedItem[]>(
     initialImage ? [initialImage] : []
@@ -49,18 +51,13 @@ export default function Images({
   };
 
   const handleClick = (
-    e: React.MouseEvent<HTMLDivElement> | React.MouseEvent<HTMLButtonElement>,
+    e: React.MouseEvent<HTMLDivElement>,
     id: string,
-    url?: string
+    url: string
   ) => {
     e.stopPropagation();
-
-    if (e.target instanceof HTMLButtonElement) {
-      copyText(url ?? "");
-      return;
-    }
-
     handleSelect("images", id);
+    setSelectedImageURL(url);
   };
 
   useEffect(() => {
@@ -127,15 +124,8 @@ export default function Images({
                     ? "ring-2 ring-green-500 shadow-lg"
                     : "border border-gray-200 hover:border-green-300"
                 }`}
-              onClick={(e) => handleClick(e, item.id)}
+              onClick={(e) => handleClick(e, item.id, item.url)}
             >
-              <button
-                className="absolute top-3 left-3 z-10 bg-white rounded-lg p-1 flex items-center gap-2 text-black"
-                onClick={(e) => handleClick(e, item.id, item.url)}
-              >
-                URL <CopyLinkIcon className="w-4 h-4" />
-              </button>
-
               {item.selected && (
                 <div className="absolute top-3 right-3 z-10 bg-green-500 text-white rounded-full p-1">
                   <CheckCircleIcon className="w-5 h-5" />

@@ -66,7 +66,7 @@ export async function POST(request: Request) {
         else if (item.type === "audio") contentType = "audio/mp3";
 
         // S3에 업로드 (temp 폴더 사용)
-        const s3Key = `temp/${item.type}/${fileName}`;
+        const s3Key = `${item.type}/${fileName}`;
         const s3Url = await uploadToS3(fileBlob, s3Key, contentType);
         const signedUrl = await getSignedUrl(s3Key);
 

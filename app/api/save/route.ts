@@ -1,10 +1,16 @@
 import { NextResponse } from "next/server";
-import fs from "fs/promises";
-import path from "path";
+import { uploadToS3 } from "@/app/utils/s3";
+
+interface SaveItem {
+  id: string;
+  url: string;
+  description: string;
+  type: "audio" | "images" | "videos";
+}
 
 export async function POST(request: Request) {
   try {
-    const { items } = await request.json();
+    const { items } = (await request.json()) as { items: SaveItem[] };
 
     if (!items) {
       return NextResponse.json(
@@ -13,25 +19,21 @@ export async function POST(request: Request) {
       );
     }
 
-    // 저장 디렉토리 생성
-    const saveDir = path.join(process.cwd(), "public", "saved");
-    try {
-      await fs.access(saveDir);
-    } catch {
-      await fs.mkdir(saveDir, { recursive: true });
-    }
-
     // 선택된 항목들의 정보를 저장
     const savedItems = {
       timestamp: new Date().toISOString(),
       items,
     };
 
+    // JSON 파일로 저장하여 S3에 업로드
     const filename = `saved_${Date.now()}.json`;
-    await fs.writeFile(
-      path.join(saveDir, filename),
-      JSON.stringify(savedItems, null, 2)
-    );
+    const jsonBlob = new Blob([JSON.stringify(savedItems, null, 2)], {
+      type: "application/json",
+    });
+
+    // temp/saved 폴더에 JSON 파일 저장
+    const s3Key = `temp/saved/${filename}`;
+    await uploadToS3(jsonBlob, s3Key, "application/json");
 
     return NextResponse.json({ success: true, filename });
   } catch (error) {

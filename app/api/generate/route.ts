@@ -1,15 +1,16 @@
 import { NextResponse } from "next/server";
 import { TextToSpeechClient } from "@google-cloud/text-to-speech";
 import { v2 } from "@google-cloud/translate";
-import fs from "fs";
-import path from "path";
 import { v4 as uuidv4 } from "uuid";
 import OpenAI from "openai";
+import RunwayML from "@runwayml/sdk";
+import { uploadToS3, getSignedUrl, getFromS3 } from "@/app/utils/s3";
 
 import { GeneratedItem } from "@/app/types";
 import { VOICE_CONFIGS } from "@/app/constants";
 
 const openaiClient = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+const runwayClient = new RunwayML();
 
 const translate = new v2.Translate({
   key: process.env.GOOGLE_API_KEY,
@@ -66,12 +67,6 @@ async function generateAudio(
   );
 
   const client = new TextToSpeechClient({ credentials });
-  const audioDir = path.join(process.cwd(), "public", "audio");
-
-  // 디렉토리가 없으면 생성
-  if (!fs.existsSync(audioDir)) {
-    fs.mkdirSync(audioDir, { recursive: true });
-  }
 
   // 음성 설정 선택
   const config = VOICE_CONFIGS[voiceIndex];
@@ -88,14 +83,19 @@ async function generateAudio(
 
   const [response] = await client.synthesizeSpeech(request);
   const audioId = uuidv4();
-  const audioPath = path.join(audioDir, `${audioId}.mp3`);
+  const audioKey = `temp/audio/${audioId}.mp3`;
 
-  await fs.promises.writeFile(audioPath, response.audioContent as Buffer);
+  // S3에 오디오 파일 업로드
+  const audioBlob = new Blob([response.audioContent as Buffer]);
+  await uploadToS3(audioBlob, audioKey, "audio/mp3");
+
+  // 서명된 URL 생성
+  const signedUrl = await getSignedUrl(audioKey);
 
   return {
     audio: {
       id: audioId,
-      url: `/audio/${audioId}.mp3`,
+      url: signedUrl,
       description: config.description,
     },
     status,
@@ -114,122 +114,102 @@ async function generateImage(
     prompt: inputs,
     n: 1,
     size: "1024x1024",
-    response_format: "url", // b64_json
+    response_format: "url",
   });
-  console.log("response", response);
 
   const imageUrl = response.data[0].url;
+  const imageId = uuidv4();
+  const imageKey = `temp/images/${imageId}.png`;
+
+  // 이미지 다운로드 및 S3 업로드
+  const imageResponse = await fetch(imageUrl as string);
+  const imageBlob = await imageResponse.blob();
+  await uploadToS3(imageBlob, imageKey, "image/png");
+
+  // 서명된 URL 생성
+  const signedUrl = await getSignedUrl(imageKey);
 
   return {
-    id: uuidv4(),
-    url: imageUrl as string,
+    id: imageId,
+    url: signedUrl,
     description: "DALL·E 2로 생성된 이미지",
   };
 }
 
-async function generateVideo(
-  text: string
-  // videoPrompt?: string
-): Promise<GeneratedItem> {
-  const videoDir = path.join(process.cwd(), "public", "videos");
-
-  // 디렉토리가 없으면 생성
-  if (!fs.existsSync(videoDir)) {
-    fs.mkdirSync(videoDir, { recursive: true });
-  }
-
-  // const inputs = await translateText(text);
-  // console.log("prompt (generateVideo)", inputs);
-
+async function generateVideo(text: string): Promise<GeneratedItem> {
   try {
-    // 1. 비디오 생성 요청
-    const createResponse = await fetch("https://api.d-id.com/talks", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Basic ${process.env.DID_API_KEY}`,
-      },
-      body: JSON.stringify({
-        script: {
-          type: "text",
-          subtitles: "false",
-          input: text,
-          provider: {
-            type: "microsoft",
-            voice_id: "Sara",
-          },
-          ssml: "false",
-        },
-        config: {
-          fluent: "false",
-        },
-        source_url:
-          "https://d-id-public-bucket.s3.us-west-2.amazonaws.com/alice.jpg",
-      }),
+    // S3에서 이미지 가져오기
+    const imageBuffer = await getFromS3("avatar.png");
+    const base64Image = imageBuffer.toString("base64");
+    console.log("이미지를 Base64로 변환 완료");
+
+    const translatedText = await translateText(text);
+    const promptText = `A realistic or stylized avatar character speaking the phrase '${translatedText}' with accurate lip-sync, front-facing, neutral background, duration under 4 seconds, close-up shot focusing on the face and mouth movements, natural lighting, high-quality animation.`;
+    console.log("promptText (generateVideo)", promptText);
+    // RunwayML API 호출
+    const task = await runwayClient.imageToVideo.create({
+      model: "gen3a_turbo",
+      promptImage: `data:image/png;base64,${base64Image}`,
+      promptText: promptText,
+      ratio: "1280:768",
+      duration: 5,
     });
 
-    console.log("createResponse", createResponse);
+    const taskId = task.id;
 
-    if (!createResponse.ok) {
-      throw new Error(`Video creation failed: ${createResponse.statusText}`);
-    }
-
-    const { id } = await createResponse.json();
-
-    // 2. 생성 완료 대기 및 결과 확인
-    let videoUrl = null;
+    // 3. 생성 완료 대기 및 결과 확인
+    let taskResult;
     let attempts = 0;
     const maxAttempts = 30; // 최대 30번 시도 (약 5분)
 
     while (attempts < maxAttempts) {
-      const checkResponse = await fetch(`https://api.d-id.com/talks/${id}`, {
-        headers: {
-          Authorization: `Basic ${process.env.DID_API_KEY}`,
-        },
-      });
-
-      if (!checkResponse.ok) {
-        throw new Error(
-          `Failed to check video status: ${checkResponse.statusText}`
-        );
-      }
-
-      const result = await checkResponse.json();
-
-      if (result.status === "done") {
-        videoUrl = result.result_url;
-        break;
-      } else if (result.status === "failed") {
-        throw new Error("Video generation failed");
-      }
-
       await new Promise((resolve) => setTimeout(resolve, 10000)); // 10초 대기
+      taskResult = await runwayClient.tasks.retrieve(taskId);
+
+      if (taskResult.status === "SUCCEEDED") {
+        break;
+      } else if (taskResult.status === "FAILED") {
+        throw new Error("비디오 생성 실패");
+      }
+
       attempts++;
     }
 
-    if (!videoUrl) {
-      throw new Error("Video generation timed out");
+    if (!taskResult || taskResult.status !== "SUCCEEDED") {
+      throw new Error("비디오 생성 시간 초과");
     }
 
-    // 3. 비디오 다운로드
+    const videoUrl = taskResult.output?.[0] as string;
+    if (!videoUrl) {
+      throw new Error("비디오 URL을 찾을 수 없습니다");
+    }
+
+    const videoId = uuidv4();
+    const videoKey = `temp/videos/${videoId}.mp4`;
+
+    // 4. 비디오 다운로드 및 S3 업로드
     const videoResponse = await fetch(videoUrl);
     if (!videoResponse.ok) {
-      throw new Error("Failed to download video");
+      throw new Error("비디오 다운로드 실패");
     }
 
-    const videoBuffer = await videoResponse.arrayBuffer();
-    const videoId = uuidv4();
-    const videoPath = path.join(videoDir, `${videoId}.mp4`);
+    const videoBlob = await videoResponse.blob();
+    await uploadToS3(videoBlob, videoKey, "video/mp4");
 
-    await fs.promises.writeFile(videoPath, Buffer.from(videoBuffer));
+    // 서명된 URL 생성
+    const signedUrl = await getSignedUrl(videoKey);
 
     return {
       id: videoId,
-      url: `/videos/${videoId}.mp4`,
-      description: "D-ID로 생성된 비디오",
+      url: signedUrl,
+      description: "RunwayML로 생성된 비디오",
     };
   } catch (error) {
-    console.error("Video generation error:", error);
-    throw error;
+    console.error("비디오 생성 오류:", error);
+    return {
+      id: "" + Date.now(),
+      url: "",
+      description: "비디오 생성 실패",
+    };
   }
 }
